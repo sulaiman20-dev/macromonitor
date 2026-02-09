@@ -23,7 +23,8 @@ const sum = items => { const t={...Z}; items.forEach(i=>{for(const k in Z) if(k!
 const monday = ds => { const d=new Date(ds+"T12:00:00"),w=d.getDay(); d.setDate(d.getDate()-w+(w===0?-6:1)); return d.toISOString().slice(0,10); };
 const weekOf = ds => { const m=new Date(monday(ds)+"T12:00:00"); return Array.from({length:7},(_,i)=>{const x=new Date(m);x.setDate(m.getDate()+i);return x.toISOString().slice(0,10);}); };
 const friendlyDate = ds => { const today=todayStr(); if(ds===today) return "Today"; const d=new Date(ds+"T12:00:00"); const y=new Date(); y.setDate(y.getDate()-1); if(ds===y.toISOString().slice(0,10)) return "Yesterday"; return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); };
-const loadDB = () => { if(typeof window==="undefined") return null; try{const r=localStorage.getItem(SK);if(r) return JSON.parse(r);}catch(e){} return {days:{},customFoods:[...SEED_CUSTOM],formUrl:"",v:6}; };
+const DEF_TARGETS = { proteinMin:145, netCarbsMin:30, netCarbsTarget:35, netCarbsUpper:40, netCarbsMax:45, fatWeeklyMax:80 };
+const loadDB = () => { if(typeof window==="undefined") return null; try{const r=localStorage.getItem(SK);if(r){const d=JSON.parse(r);if(!d.targets)d.targets={...DEF_TARGETS};return d;}}catch(e){} return {days:{},customFoods:[...SEED_CUSTOM],formUrl:"",targets:{...DEF_TARGETS},v:6}; };
 const saveDB = d => { try{localStorage.setItem(SK,JSON.stringify(d));}catch(e){} };
 const T = { bg:"#06090f",sf:"#0d1320",sf2:"#141d2f",bd:"#1b2740",bd2:"#253350",tx:"#e4eaf2",txd:"#8694ad",txm:"#4e5d76",ac:"#10b981",warn:"#f59e0b",warnBg:"#3b2506",err:"#ef4444",errBg:"#3b0a0a",prot:"#a78bfa",fat:"#fb923c",carb:"#34d399",cal:"#f472b6",na:"#60a5fa",k:"#c084fc",mg:"#2dd4bf" };
 const Card = ({children,style}) => <div style={{background:T.sf,borderRadius:14,border:"1px solid "+T.bd,padding:16,...style}}>{children}</div>;
@@ -186,12 +187,13 @@ export default function MacroMonitor() {
   const wkDates=weekOf(selectedDate);
   const wkData=wkDates.map(d=>{const di=data?.days?.[d];const dt=new Date(d+"T12:00:00");const dow=dt.getDay();return{date:d,label:DN[dow===0?6:dow-1],...(di?.items?.length?sum(di.items):Z),has:!!(di?.items?.length)};});
   const wkAvg=useMemo(()=>{const f=wkData.filter(d=>d.has);if(!f.length)return Z;const s={...Z};f.forEach(d=>Object.keys(s).forEach(k=>(s[k]+=d[k])));Object.keys(s).forEach(k=>(s[k]/=f.length));return s;},[wkData]);
+  const tgt=data?.targets||DEF_TARGETS;
   const warns=[];
-  if(totals.protein<145&&dayItems.length>0) warns.push({m:"Protein at "+r1(totals.protein)+"g, need "+r1(145-totals.protein)+"g more",d:false});
-  if(totals.netCarbs>45) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, over 45g!",d:true});
-  else if(totals.netCarbs>40) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, above 40g",d:false});
-  if(totals.netCarbs>0&&totals.netCarbs<30) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, below 30g min",d:false});
-  if(wkAvg.fat>80&&wkData.filter(d=>d.has).length>1) warns.push({m:"Weekly avg fat "+r1(wkAvg.fat)+"g, over 80g",d:false});
+  if(totals.protein<tgt.proteinMin&&dayItems.length>0) warns.push({m:"Protein at "+r1(totals.protein)+"g, need "+r1(tgt.proteinMin-totals.protein)+"g more",d:false});
+  if(totals.netCarbs>tgt.netCarbsMax) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, over "+tgt.netCarbsMax+"g!",d:true});
+  else if(totals.netCarbs>tgt.netCarbsUpper) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, above "+tgt.netCarbsUpper+"g",d:false});
+  if(totals.netCarbs>0&&totals.netCarbs<tgt.netCarbsMin) warns.push({m:"Net carbs "+r1(totals.netCarbs)+"g, below "+tgt.netCarbsMin+"g min",d:false});
+  if(wkAvg.fat>tgt.fatWeeklyMax&&wkData.filter(d=>d.has).length>1) warns.push({m:"Weekly avg fat "+r1(wkAvg.fat)+"g, over "+tgt.fatWeeklyMax+"g",d:false});
   const saveCF=f=>{setData(p=>{const i=p.customFoods.findIndex(x=>x.id===f.id);const n=[...p.customFoods];if(i>=0)n[i]=f;else n.push(f);return{...p,customFoods:n};});setEditFood(null);setAddFood(false);};
   const delCF=id=>setData(p=>({...p,customFoods:p.customFoods.filter(f=>f.id!==id)}));
   const doExport=()=>{const b=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="macro-"+today+".json";a.click();};
@@ -239,9 +241,9 @@ export default function MacroMonitor() {
             {warns.map((w,i)=><Alert key={i} danger={w.d}>{w.m}</Alert>)}
             <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
               <Metric label="Calories" value={totals.calories} unit="kcal" color={T.cal}/>
-              <Metric label="Protein" value={totals.protein} unit="g" color={T.prot} target={145} warn={totals.protein<145&&dayItems.length>2}/>
+              <Metric label="Protein" value={totals.protein} unit="g" color={T.prot} target={tgt.proteinMin} warn={totals.protein<tgt.proteinMin&&dayItems.length>2}/>
               <Metric label="Fat" value={totals.fat} unit="g" color={T.fat}/>
-              <Metric label="Net Carbs" value={totals.netCarbs} unit="g" color={T.carb} target="30-35" warn={totals.netCarbs>40||(totals.netCarbs>0&&totals.netCarbs<30)}/>
+              <Metric label="Net Carbs" value={totals.netCarbs} unit="g" color={T.carb} target={tgt.netCarbsMin+"-"+tgt.netCarbsTarget} warn={totals.netCarbs>tgt.netCarbsUpper||(totals.netCarbs>0&&totals.netCarbs<tgt.netCarbsMin)}/>
             </div>
             <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
               <Metric label="Sodium" value={totals.sodium} unit="mg" color={T.na}/>
@@ -268,8 +270,8 @@ export default function MacroMonitor() {
               <div style={{fontSize:13,fontWeight:600,color:T.txd,marginBottom:12}}>Weekly Averages - {wkData.filter(d=>d.has).length} days</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
                 <Metric label="Avg Cal" value={wkAvg.calories} unit="kcal" color={T.cal}/>
-                <Metric label="Avg Prot" value={wkAvg.protein} unit="g" color={T.prot} target={145}/>
-                <Metric label="Avg Fat" value={wkAvg.fat} unit="g" color={T.fat} warn={wkAvg.fat>80}/>
+                <Metric label="Avg Prot" value={wkAvg.protein} unit="g" color={T.prot} target={tgt.proteinMin}/>
+                <Metric label="Avg Fat" value={wkAvg.fat} unit="g" color={T.fat} warn={wkAvg.fat>tgt.fatWeeklyMax}/>
                 <Metric label="Avg NC" value={wkAvg.netCarbs} unit="g" color={T.carb}/>
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:10}}>
@@ -343,12 +345,16 @@ export default function MacroMonitor() {
               ))}
             </Card>
             <Card>
-              <div style={{fontSize:13,fontWeight:600,color:T.txd,marginBottom:10}}>Targets</div>
-              <div style={{fontSize:12.5,color:T.txd,lineHeight:1.9}}>
-                <div>Protein: <span style={{color:T.prot,fontWeight:600}}>145g/day</span></div>
-                <div>Net Carbs: <span style={{color:T.carb,fontWeight:600}}>30-35g</span> | <span style={{color:T.warn}}>40g</span> upper | <span style={{color:T.err}}>45g</span> max</div>
-                <div>Fat: weekly avg under <span style={{color:T.fat,fontWeight:600}}>80g/day</span></div>
+              <div style={{fontSize:13,fontWeight:600,color:T.txd,marginBottom:12}}>Targets</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div><label style={{fontSize:11,color:T.prot,fontWeight:600}}>Protein min (g/day)</label><input type="number" value={tgt.proteinMin} onChange={e=>setData(p=>({...p,targets:{...p.targets,proteinMin:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
+                <div><label style={{fontSize:11,color:T.fat,fontWeight:600}}>Fat weekly avg max (g)</label><input type="number" value={tgt.fatWeeklyMax} onChange={e=>setData(p=>({...p,targets:{...p.targets,fatWeeklyMax:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
+                <div><label style={{fontSize:11,color:T.carb,fontWeight:600}}>Net carbs min (g)</label><input type="number" value={tgt.netCarbsMin} onChange={e=>setData(p=>({...p,targets:{...p.targets,netCarbsMin:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
+                <div><label style={{fontSize:11,color:T.carb,fontWeight:600}}>Net carbs target (g)</label><input type="number" value={tgt.netCarbsTarget} onChange={e=>setData(p=>({...p,targets:{...p.targets,netCarbsTarget:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
+                <div><label style={{fontSize:11,color:T.warn,fontWeight:600}}>Net carbs upper warn (g)</label><input type="number" value={tgt.netCarbsUpper} onChange={e=>setData(p=>({...p,targets:{...p.targets,netCarbsUpper:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
+                <div><label style={{fontSize:11,color:T.err,fontWeight:600}}>Net carbs hard max (g)</label><input type="number" value={tgt.netCarbsMax} onChange={e=>setData(p=>({...p,targets:{...p.targets,netCarbsMax:+e.target.value||0}}))} style={{width:"100%",boxSizing:"border-box",background:T.sf2,border:"1px solid "+T.bd,borderRadius:6,padding:"8px 10px",color:T.tx,fontSize:14,fontFamily:"'JetBrains Mono',monospace",marginTop:4}}/></div>
               </div>
+              <button onClick={()=>setData(p=>({...p,targets:{...DEF_TARGETS}}))} style={{marginTop:12,background:"transparent",border:"1px solid "+T.bd,borderRadius:6,padding:"6px 12px",color:T.txm,cursor:"pointer",fontSize:11}}>Reset to defaults</button>
             </Card>
             <Card>
               <div style={{fontSize:13,fontWeight:600,color:T.txd,marginBottom:10}}>Data</div>
