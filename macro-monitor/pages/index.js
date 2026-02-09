@@ -201,7 +201,7 @@ export default function MacroMonitor() {
   return (
     <>
       <Head><title>Macro Monitor</title><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/></Head>
-      <style jsx global>{"*{box-sizing:border-box;margin:0;padding:0}body{background:"+T.bg+"}input:focus,textarea:focus{outline:none;border-color:"+T.ac+"!important}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:"+T.bg+"}::-webkit-scrollbar-thumb{background:"+T.bd2+";border-radius:3px}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}"}</style>
+      <style jsx global>{`*{box-sizing:border-box;margin:0;padding:0}body{background:${T.bg}}input:focus,textarea:focus{outline:none;border-color:${T.ac}!important}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:${T.bg}}::-webkit-scrollbar-thumb{background:${T.bd2};border-radius:3px}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
       <div style={{minHeight:"100vh",background:T.bg,color:T.tx,fontFamily:"'IBM Plex Sans',-apple-system,sans-serif"}}>
         <div style={{background:T.sf,borderBottom:"1px solid "+T.bd,padding:"14px 20px",position:"sticky",top:0,zIndex:100}}>
           <div style={{maxWidth:780,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
